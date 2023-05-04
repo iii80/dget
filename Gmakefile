@@ -29,6 +29,15 @@ darwin (.darwin){
     go build -o ./bin/${GOOS}_$GOARCH/  ./cmd/dget 
 }
 
+env.darwin_arm {
+    GOOS: darwin
+    GOARCH: arm64
+}
+
+darwin_arm (.darwin_arm){
+    go build -o ./bin/${GOOS}_$GOARCH/  ./cmd/dget 
+}
+
 env.windows {
     GOOS: windows
     GOARCH: amd64
