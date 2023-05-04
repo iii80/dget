@@ -22,6 +22,14 @@ dget influxdb:1.8.3
 
 成功的话，会直接生成tar.gz包
 
+## 关于从第三方registry下载
+
+```
+dget alibaba-cloud-linux-3-registry.cn-hangzhou.cr.aliyuncs.com/alinux3/alinux3:220901.1
+```
+
+形如上述调用方法，直接在包名称前面跟上服务器地址即可（v1.0.1)
+
 ## 选择架构
 
 最近很多的包都推出了多架构，命令增加了选择架构的功能

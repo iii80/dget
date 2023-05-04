@@ -22,7 +22,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-const _registry = "registry-1.docker.io"
+// const _registry = "registry-1.docker.io"
 const _authUrl = "https://auth.docker.io/token"
 const _regService = "registry.docker.io"
 
@@ -69,7 +69,7 @@ type PackageConfig struct {
 	Layers   []string
 }
 
-func Install(d, tag string, arch string, printInfo bool) (err error) {
+func Install(_registry, d, tag string, arch string, printInfo bool) (err error) {
 	var authUrl = _authUrl
 	var regService = _regService
 	resp, err := http.Get(fmt.Sprintf("https://%s/v2/", _registry))
@@ -92,8 +92,9 @@ func Install(d, tag string, arch string, printInfo bool) (err error) {
 		resp.Body.Close()
 		var accessToken string
 		logrus.Debugln("reg_service", regService)
+		logrus.Debugln("authUrl", authUrl)
 
-		accessToken, err = getAuthHead("application/vnd.docker.distribution.manifest.v2+json", authUrl, regService, d)
+		accessToken, err = getAuthHead(authUrl, regService, d)
 		if err == nil {
 
 			var req *http.Request
@@ -337,14 +338,14 @@ response:
 	return
 }
 
-func getAuthHead(u, a, r, d string) (string, error) {
+func getAuthHead(a, r, d string) (string, error) {
 	resp, err := http.Get(fmt.Sprintf("%s?service=%s&scope=repository:%s:pull", a, r, d))
-	defer resp.Body.Close()
 	if err == nil {
+		defer resp.Body.Close()
 		var results map[string]interface{}
 		err = json.NewDecoder(resp.Body).Decode(&results)
 		logrus.Debug(results)
-		if err == nil {
+		if err == nil && results["access_token"] != nil {
 			return results["access_token"].(string), nil
 		}
 	}
