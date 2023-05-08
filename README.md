@@ -42,7 +42,7 @@ dget -arch linux/arm influxdb:1.8.3
 
 ## 直接下载链接
 
-[windows x64版本](https://dget.oss-cn-beijing.aliyuncs.com/dget_windows_amd64_v1_0_1.zip)
+[windows x64版本](https://dget.oss-cn-beijing.aliyuncs.com/dget_windows_amd64_v_1_0_1.zip)
 [linux amd64版本](https://dget.oss-cn-beijing.aliyuncs.com/dget_linux_amd64_v_1_0_1.zip)
 [linux arm版本](https://dget.oss-cn-beijing.aliyuncs.com/dget_linux_arm_v_1_0_1.zip)
 [Mac 传统版本](https://dget.oss-cn-beijing.aliyuncs.com/dget_darwin_amd64_v1_0_1.zip)
