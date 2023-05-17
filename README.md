@@ -45,5 +45,5 @@ dget -arch linux/arm influxdb:1.8.3
 [windows x64版本](./bin/windows_amd64/dget.exe)
 [linux amd64版本](./bin/linux_amd64/dget)
 [linux arm版本](./bin/linux_arm/dget)
-[Mac 传统版本](https://dget.oss-cn-beijing.aliyuncs.com/dget_darwin_amd64_v1_0_1.zip)
-[Mac arm64版本](https://dget.oss-cn-beijing.aliyuncs.com/dget_darwin_arm64_v1_0_1.zip)
+[Mac 传统版本](./bin/darwin_amd64/dget)
+[Mac arm64版本](./bin/darwin_arm64/dget)
