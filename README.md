@@ -6,13 +6,24 @@
 
 所以，我们可以直接使用dget从docker hub中下载镜像包，然后再离线安装
 
-## 安装dget
+
+## 直接下载链接
+
+[windows x64版本](./bin/windows_amd64/dget.exe)
+[linux amd64版本](./bin/linux_amd64/dget)
+[linux arm版本](./bin/linux_arm/dget)
+[Mac 传统版本](./bin/darwin_amd64/dget)
+[Mac arm64版本](./bin/darwin_arm64/dget)
+
+## 使用go安装dget
 
 ```bash
 go install gitee.com/extrame/dget/cmd/dget@latest
 ```
 
 ## 使用方法
+
+注意，本程序为命令行程序，需要使用命令行[cmd/powershell/bash等]打开
 
 ```bash
 dget influxdb:1.8.3
@@ -39,11 +50,3 @@ dget alibaba-cloud-linux-3-registry.cn-hangzhou.cr.aliyuncs.com/alinux3/alinux3:
 ```bash
 dget -arch linux/arm influxdb:1.8.3
 ```
-
-## 直接下载链接
-
-[windows x64版本](./bin/windows_amd64/dget.exe)
-[linux amd64版本](./bin/linux_amd64/dget)
-[linux arm版本](./bin/linux_arm/dget)
-[Mac 传统版本](./bin/darwin_amd64/dget)
-[Mac arm64版本](./bin/darwin_arm64/dget)
