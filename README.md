@@ -50,3 +50,15 @@ dget alibaba-cloud-linux-3-registry.cn-hangzhou.cr.aliyuncs.com/alinux3/alinux3:
 ```bash
 dget -arch linux/arm influxdb:1.8.3
 ```
+
+## 设置代理
+
+使用参数 -proxy 设置下载和获取时需要使用的代理
+
+## 直接下载链接
+
+[windows x64版本](./bin/windows_amd64/dget.exe)
+[linux amd64版本](./bin/linux_amd64/dget)
+[linux arm版本](./bin/linux_arm/dget)
+[Mac 传统版本](./bin/darwin_amd64/dget)
+[Mac arm64版本](./bin/darwin_arm64/dget)

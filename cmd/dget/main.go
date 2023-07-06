@@ -2,6 +2,8 @@ package main
 
 import (
 	"flag"
+	"net/http"
+	"net/url"
 	"os"
 	"strings"
 
@@ -13,6 +15,7 @@ func main() {
 	debug := flag.Bool("debug", false, "打印调试信息")
 	printInfo := flag.Bool("print", false, "只打印获取信息")
 	arch := flag.String("arch", "linux/amd64", "指定架构")
+	proxy := flag.String("proxy", "", "http proxy")
 	var registry string
 	flag.StringVar(&registry, "registry", "registry-1.docker.io", "指定镜像仓库")
 
@@ -44,7 +47,23 @@ func main() {
 			pkg = strings.Join(partsOfPkg[1:], "/")
 		}
 	}
-	err := dget.Install(registry, pkg, tag, *arch, *printInfo)
+
+	var client dget.Client
+	if *proxy != "" {
+		proxyUrl, err := url.Parse("http://proxyIp:proxyPort")
+		if err != nil {
+			logrus.Fatalln("代理地址"+*proxy+"错误", err)
+		}
+		client.SetClient(&http.Client{
+			Transport: &http.Transport{
+				Proxy: http.ProxyURL(proxyUrl),
+			},
+		})
+	} else {
+		client.SetClient(http.DefaultClient)
+	}
+
+	err := client.Install(registry, pkg, tag, *arch, *printInfo)
 	if err != nil {
 		logrus.Fatalln("下载发生错误", err)
 	}

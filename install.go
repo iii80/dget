@@ -12,6 +12,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -69,7 +70,15 @@ type PackageConfig struct {
 	Layers   []string
 }
 
-func Install(_registry, d, tag string, arch string, printInfo bool) (err error) {
+type Client struct {
+	c *http.Client
+}
+
+func (m *Client) SetClient(c *http.Client) {
+	m.c = c
+}
+
+func (m *Client) Install(_registry, d, tag string, arch string, printInfo bool) (err error) {
 	var authUrl = _authUrl
 	var regService = _regService
 	resp, err := http.Get(fmt.Sprintf("https://%s/v2/", _registry))
@@ -99,9 +108,9 @@ func Install(_registry, d, tag string, arch string, printInfo bool) (err error) 
 
 			var req *http.Request
 
-			var url = fmt.Sprintf("https://%s/v2/%s/manifests/%s", _registry, d, tag)
-			req, err = http.NewRequest("GET", url, nil)
-			logrus.Infoln("获取manifests信息", url)
+			var manifestURL = fmt.Sprintf("https://%s/v2/%s/manifests/%s", _registry, d, tag)
+			req, err = http.NewRequest("GET", manifestURL, nil)
+			logrus.Infoln("获取manifests信息", manifestURL)
 			if err == nil {
 				logrus.Debugln("Authorization by", accessToken)
 				req.Header.Add("Authorization", "Bearer "+accessToken)
@@ -109,7 +118,7 @@ func Install(_registry, d, tag string, arch string, printInfo bool) (err error) 
 
 				var authHeader = req.Header
 
-				resp, err = http.DefaultClient.Do(req)
+				resp, err = m.c.Do(req)
 				if resp.StatusCode != 200 {
 					bts, er := ioutil.ReadAll(resp.Body)
 					resp.Body.Close()
@@ -118,10 +127,10 @@ func Install(_registry, d, tag string, arch string, printInfo bool) (err error) 
 					case 401:
 						logrus.Errorf("[-] Cannot fetch manifest for %s [HTTP %d] with error access_token", d, resp.StatusCode)
 					case 404:
-						logrus.Errorf("[-] Cannot fetch manifest for %s [HTTP %d] with url %s", d, resp.StatusCode, url)
+						logrus.Errorf("[-] Cannot fetch manifest for %s [HTTP %d] with url %s", d, resp.StatusCode, manifestURL)
 						resp.Body.Close()
 						req.Header.Set("Accept", "application/vnd.docker.distribution.manifest.list.v2+json")
-						resp, err = http.DefaultClient.Do(req)
+						resp, err = m.c.Do(req)
 						bts, er := ioutil.ReadAll(resp.Body)
 						fmt.Println(string(bts), er)
 					}
@@ -150,6 +159,8 @@ func Install(_registry, d, tag string, arch string, printInfo bool) (err error) 
 									if m.Platform.OS+"/"+m.Platform.Architecture == arch {
 										logrus.Infoln("找到匹配的架构,开始下载")
 										selectedManifest = &m
+										req.URL, _ = url.Parse(fmt.Sprintf("https://%s/v2/%s/manifests/%s", _registry, d, m.Digest.String()))
+										break
 									}
 								}
 								if printInfo {
@@ -161,13 +172,14 @@ func Install(_registry, d, tag string, arch string, printInfo bool) (err error) 
 									return errors.New("未找到匹配的架构:" + arch)
 								}
 
+								logrus.Debug("找到的架构信息为", selectedManifest)
 								req.Header.Set("Accept", selectedManifest.MediaType)
 							}
 						case "application/vnd.docker.distribution.manifest.v1+prettyjws":
 							req.Header.Set("Accept", "application/vnd.docker.distribution.manifest.v2+json")
 						}
 
-						resp, err = http.DefaultClient.Do(req)
+						resp, err = m.c.Do(req)
 
 						if err == nil {
 
@@ -178,7 +190,7 @@ func Install(_registry, d, tag string, arch string, printInfo bool) (err error) 
 								resp.Body.Close()
 								logrus.Infof("获得Manifest信息，共%d层需要下载", len(info.Layers))
 
-								err = download(_registry, d, tag, info.Config.Digest, authHeader, info.Layers)
+								err = m.download(_registry, d, tag, info.Config.Digest, authHeader, info.Layers)
 								if err != nil {
 									goto response
 								}
@@ -193,7 +205,7 @@ response:
 	return
 }
 
-func download(_registry, d, tag string, digest digest.Digest, authHeader http.Header, layers []Layer) (err error) {
+func (m *Client) download(_registry, d, tag string, digest digest.Digest, authHeader http.Header, layers []Layer) (err error) {
 	var tmpDir = fmt.Sprintf("tmp_%s_%s", d, tag)
 	err = os.MkdirAll(tmpDir, 0777)
 	if err == nil {
@@ -205,7 +217,7 @@ func download(_registry, d, tag string, digest digest.Digest, authHeader http.He
 			if err == nil {
 				req.Header = authHeader
 				var resp *http.Response
-				resp, err = http.DefaultClient.Do(req)
+				resp, err = m.c.Do(req)
 				if err == nil {
 					var dest *os.File
 					dest, err = os.OpenFile(filepath.Join(tmpDir, digest.Encoded()+".json"), os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0666)
@@ -247,7 +259,7 @@ func download(_registry, d, tag string, digest digest.Digest, authHeader http.He
 											if err == nil {
 												req.Header = authHeader
 												req.Header.Set("Accept", "application/vnd.docker.distribution.manifest.v2+json")
-												resp, err = http.DefaultClient.Do(req)
+												resp, err = m.c.Do(req)
 												if err == nil {
 													if resp.StatusCode != 200 {
 														defer resp.Body.Close()
@@ -256,7 +268,7 @@ func download(_registry, d, tag string, digest digest.Digest, authHeader http.He
 															if err == nil {
 																req.Header = authHeader
 																req.Header.Set("Accept", "application/vnd.docker.distribution.manifest.v2+json")
-																resp, err = http.DefaultClient.Do(req)
+																resp, err = m.c.Do(req)
 																if err == nil {
 																	if resp.StatusCode != 200 {
 																		err = fmt.Errorf("download from customized url fail for layer[%d]", n)
