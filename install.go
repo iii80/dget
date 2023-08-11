@@ -114,6 +114,8 @@ func (m *Client) Install(_registry, d, tag string, arch string, printInfo bool) 
 			if err == nil {
 				logrus.Debugln("Authorization by", accessToken)
 				req.Header.Add("Authorization", "Bearer "+accessToken)
+				// req.Header.Add("Accept", "application/vnd.oci.image.manifest.v1+json")
+				req.Header.Add("Accept", "application/vnd.oci.image.index.v1+json")
 				req.Header.Add("Accept", "application/vnd.docker.distribution.manifest.list.v2+json")
 
 				var authHeader = req.Header
@@ -142,8 +144,9 @@ func (m *Client) Install(_registry, d, tag string, arch string, printInfo bool) 
 					bts, err = io.ReadAll(resp.Body)
 
 					if err == nil {
+						logrus.WithField("Content-Type", resp.Header.Get("Content-Type")).Debugln("Get manifest list")
 						switch resp.Header.Get("Content-Type") {
-						case "application/vnd.docker.distribution.manifest.list.v2+json":
+						case "application/vnd.docker.distribution.manifest.list.v2+json", "application/vnd.oci.image.index.v1+json":
 							var info manifestlist.ManifestList
 							err = json.Unmarshal(bts, &info)
 
