@@ -50,7 +50,7 @@ func main() {
 
 	var client dget.Client
 	if *proxy != "" {
-		proxyUrl, err := url.Parse("http://proxyIp:proxyPort")
+		proxyUrl, err := url.Parse(*proxy)
 		if err != nil {
 			logrus.Fatalln("代理地址"+*proxy+"错误", err)
 		}

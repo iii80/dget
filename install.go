@@ -89,13 +89,14 @@ func (m *Client) Install(_registry, d, tag string, arch string, printInfo bool) 
 		if resp.StatusCode == 401 {
 			//Bearer realm="https://auth.docker.io/token",service="registry.docker.io"
 			var hAuths = strings.Split(resp.Header.Get("Www-Authenticate"), "\"")
+			logrus.Debugln("Www-Authenticate", hAuths)
 			if len(hAuths) > 1 {
 				authUrl = hAuths[1]
 			}
 			if len(hAuths) > 3 {
 				regService = hAuths[3]
 			} else {
-				regService = ""
+				regService = _registry
 			}
 		}
 		resp.Body.Close()
@@ -115,8 +116,8 @@ func (m *Client) Install(_registry, d, tag string, arch string, printInfo bool) 
 				logrus.Debugln("Authorization by", accessToken)
 				req.Header.Add("Authorization", "Bearer "+accessToken)
 				// req.Header.Add("Accept", "application/vnd.oci.image.manifest.v1+json")
-				req.Header.Add("Accept", "application/vnd.oci.image.index.v1+json")
 				req.Header.Add("Accept", "application/vnd.docker.distribution.manifest.list.v2+json")
+				req.Header.Add("Accept", "application/vnd.oci.image.index.v1+json")
 
 				var authHeader = req.Header
 
@@ -372,7 +373,9 @@ func (m *Client) download(_registry, d, tag string, digest digest.Digest, authHe
 }
 
 func getAuthHead(a, r, d string) (string, error) {
-	resp, err := http.Get(fmt.Sprintf("%s?service=%s&scope=repository:%s:pull", a, r, d))
+	var regUrl = fmt.Sprintf("%s?service=%s&scope=repository:%s:pull", a, r, d)
+	logrus.Debug("get auth head from", regUrl)
+	resp, err := http.Get(regUrl)
 	if err == nil {
 		defer resp.Body.Close()
 		var results map[string]interface{}
