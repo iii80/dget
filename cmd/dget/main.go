@@ -16,6 +16,8 @@ func main() {
 	printInfo := flag.Bool("print", false, "只打印获取信息")
 	arch := flag.String("arch", "linux/amd64", "指定架构")
 	proxy := flag.String("proxy", "", "http proxy")
+	username := flag.String("username", "", "username")
+	password := flag.String("password", "", "password")
 	var registry string
 	flag.StringVar(&registry, "registry", "registry-1.docker.io", "指定镜像仓库")
 
@@ -63,7 +65,7 @@ func main() {
 		client.SetClient(http.DefaultClient)
 	}
 
-	err := client.Install(registry, pkg, tag, *arch, *printInfo)
+	err := client.Install(registry, pkg, tag, *arch, *printInfo, *username, *password)
 	if err != nil {
 		logrus.Fatalln("下载发生错误", err)
 	}

@@ -78,7 +78,7 @@ func (m *Client) SetClient(c *http.Client) {
 	m.c = c
 }
 
-func (m *Client) Install(_registry, d, tag string, arch string, printInfo bool) (err error) {
+func (m *Client) Install(_registry, d, tag string, arch string, printInfo bool, username string, password string) (err error) {
 	var authUrl = _authUrl
 	var regService = _regService
 	resp, err := http.Get(fmt.Sprintf("https://%s/v2/", _registry))
@@ -102,8 +102,11 @@ func (m *Client) Install(_registry, d, tag string, arch string, printInfo bool) 
 		var accessToken string
 		logrus.Debugln("reg_service", regService)
 		logrus.Debugln("authUrl", authUrl)
-
-		accessToken, err = getAuthHead(authUrl, regService, d)
+		if (username != "" && password != "") {
+			accessToken, err = getTokenWithBasicAuth(m, authUrl, regService, d, username, password)
+		} else {
+			accessToken, err = getAuthHead(authUrl, regService, d)
+		}
 		if err == nil {
 
 			var req *http.Request
@@ -371,6 +374,30 @@ func (m *Client) download(_registry, d, tag string, digest digest.Digest, authHe
 	return
 }
 
+func getTokenWithBasicAuth(m *Client, url, service, repository, username, password string) (string, error) {
+	req, err := http.NewRequest(http.MethodGet, url, http.NoBody)
+	if err != nil {
+		logrus.Fatal(err)
+		return "", err
+	}
+	req.SetBasicAuth(username, password)
+	
+	query := req.URL.Query()
+	query.Add("service", service)
+	query.Add("scope", fmt.Sprintf("repository:%s:pull", repository))
+	req.URL.RawQuery = query.Encode()
+	resp, err := m.c.Do(req)
+	if err == nil {
+		defer resp.Body.Close()
+		var results map[string]interface{}
+		err = json.NewDecoder(resp.Body).Decode(&results)
+		logrus.Debug(results)
+		if err == nil && results["token"] != nil {
+			return results["token"].(string), nil
+		}
+	}
+	return "", err
+}
 func getAuthHead(a, r, d string) (string, error) {
 	resp, err := http.Get(fmt.Sprintf("%s?service=%s&scope=repository:%s:pull", a, r, d))
 	if err == nil {
