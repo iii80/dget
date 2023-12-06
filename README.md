@@ -62,3 +62,13 @@ dget -arch linux/arm influxdb:1.8.3
 [linux arm版本](./bin/linux_arm/dget)
 [Mac 传统版本](./bin/darwin_amd64/dget)
 [Mac arm64版本](./bin/darwin_arm64/dget)
+
+## 编译
+
+```bash
+
+CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -o ./bin/darwin_arm64/ ./cmd/dget
+
+CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -o ./bin/windows_amd64/ ./cmd/dget
+
+```

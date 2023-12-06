@@ -73,7 +73,10 @@ type PackageConfig struct {
 type Client struct {
 	c *http.Client
 }
-
+type TagList struct {
+	Name string
+	Tags []string
+}
 func (m *Client) SetClient(c *http.Client) {
 	m.c = c
 }
@@ -108,8 +111,33 @@ func (m *Client) Install(_registry, d, tag string, arch string, printInfo bool, 
 			accessToken, err = getAuthHead(authUrl, regService, d)
 		}
 		if err == nil {
-
 			var req *http.Request
+
+			if tag == "latest" {
+				var tagListURL = fmt.Sprintf("https://%s/v2/%s/tags/list", _registry, d)
+				logrus.Debugln("tags request", tagListURL)
+
+				req, err = http.NewRequest("GET", tagListURL, nil)
+				if err == nil {
+					req.Header.Add("Authorization", "Bearer "+accessToken)
+					resp, err = m.c.Do(req)
+					if err == nil && resp.StatusCode == 200 {
+						var bts []byte
+						bts, err = io.ReadAll(resp.Body)
+						logrus.Debugln("tags response", string(bts))
+						if err == nil {
+							var tagList TagList
+							err = json.Unmarshal(bts, &tagList)
+							
+							if err == nil && len(tagList.Tags) > 0 {
+								tag = tagList.Tags[0]
+							}
+						}
+						resp.Body.Close()
+					}
+				}
+			}
+
 
 			var manifestURL = fmt.Sprintf("https://%s/v2/%s/manifests/%s", _registry, d, tag)
 			req, err = http.NewRequest("GET", manifestURL, nil)
