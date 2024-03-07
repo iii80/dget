@@ -77,10 +77,71 @@ type TagList struct {
 	Name string
 	Tags []string
 }
+
 func (m *Client) SetClient(c *http.Client) {
 	m.c = c
 }
+func (m *Client) Tags(_registry, d, tag string, arch string, printInfo bool, username string, password string) (err error) {
+	var authUrl = _authUrl
+	var regService = _regService
+	resp, err := http.Get(fmt.Sprintf("https://%s/v2/", _registry))
+	if err == nil {
+		if !strings.Contains(d, "/") {
+			d = "library/" + d
+		}
+		if resp.StatusCode == 401 {
+			//Bearer realm="https://auth.docker.io/token",service="registry.docker.io"
+			var hAuths = strings.Split(resp.Header.Get("Www-Authenticate"), "\"")
+			if len(hAuths) > 1 {
+				authUrl = hAuths[1]
+			}
+			if len(hAuths) > 3 {
+				regService = hAuths[3]
+			} else {
+				regService = ""
+			}
+		}
+		resp.Body.Close()
+		var accessToken string
+		logrus.Debugln("reg_service", regService)
+		logrus.Debugln("authUrl", authUrl)
+		if username != "" && password != "" {
+			accessToken, err = getTokenWithBasicAuth(m, authUrl, regService, d, username, password)
+		} else {
+			accessToken, err = getAuthHead(authUrl, regService, d)
+		}
+		if err == nil {
+			var req *http.Request
 
+			var tagListURL = fmt.Sprintf("https://%s/v2/%s/tags/list", _registry, d)
+			logrus.Debugln("tags request", tagListURL)
+
+			req, err = http.NewRequest("GET", tagListURL, nil)
+			if err == nil {
+				req.Header.Add("Authorization", "Bearer "+accessToken)
+				resp, err = m.c.Do(req)
+				if err == nil && resp.StatusCode == 200 {
+					var bts []byte
+					bts, err = io.ReadAll(resp.Body)
+					logrus.Debugln("tags response", string(bts))
+					if err == nil {
+						var tagList TagList
+						err = json.Unmarshal(bts, &tagList)
+
+						if err == nil && len(tagList.Tags) > 0 {
+							for i := 0; i < len(tagList.Tags); i++ {
+								logrus.Println(tagList.Tags[i])
+							}
+						}
+					}
+					resp.Body.Close()
+				}
+			}
+
+		}
+	}
+	return err
+}
 func (m *Client) Install(_registry, d, tag string, arch string, printInfo bool, username string, password string) (err error) {
 	var authUrl = _authUrl
 	var regService = _regService
@@ -105,7 +166,7 @@ func (m *Client) Install(_registry, d, tag string, arch string, printInfo bool, 
 		var accessToken string
 		logrus.Debugln("reg_service", regService)
 		logrus.Debugln("authUrl", authUrl)
-		if (username != "" && password != "") {
+		if username != "" && password != "" {
 			accessToken, err = getTokenWithBasicAuth(m, authUrl, regService, d, username, password)
 		} else {
 			accessToken, err = getAuthHead(authUrl, regService, d)
@@ -128,7 +189,7 @@ func (m *Client) Install(_registry, d, tag string, arch string, printInfo bool, 
 						if err == nil {
 							var tagList TagList
 							err = json.Unmarshal(bts, &tagList)
-							
+
 							if err == nil && len(tagList.Tags) > 0 {
 								tag = tagList.Tags[0]
 							}
@@ -137,7 +198,6 @@ func (m *Client) Install(_registry, d, tag string, arch string, printInfo bool, 
 					}
 				}
 			}
-
 
 			var manifestURL = fmt.Sprintf("https://%s/v2/%s/manifests/%s", _registry, d, tag)
 			req, err = http.NewRequest("GET", manifestURL, nil)
@@ -409,7 +469,7 @@ func getTokenWithBasicAuth(m *Client, url, service, repository, username, passwo
 		return "", err
 	}
 	req.SetBasicAuth(username, password)
-	
+
 	query := req.URL.Query()
 	query.Add("service", service)
 	query.Add("scope", fmt.Sprintf("repository:%s:pull", repository))
