@@ -7,7 +7,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -20,6 +19,7 @@ import (
 
 	"github.com/docker/distribution/manifest/manifestlist"
 	"github.com/opencontainers/go-digest"
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
 
@@ -123,7 +123,7 @@ func (m *Client) Install(_registry, d, tag string, arch string, printInfo bool) 
 
 				resp, err = m.c.Do(req)
 				if resp.StatusCode != 200 {
-					bts, er := ioutil.ReadAll(resp.Body)
+					bts, er := io.ReadAll(resp.Body)
 					resp.Body.Close()
 					logrus.Debugln(string(bts), er)
 					switch resp.StatusCode {
@@ -195,6 +195,7 @@ func (m *Client) Install(_registry, d, tag string, arch string, printInfo bool) 
 								logrus.Infof("获得Manifest信息，共%d层需要下载", len(info.Layers))
 
 								err = m.download(_registry, d, tag, info.Config.Digest, authHeader, info.Layers)
+
 								if err != nil {
 									goto response
 								}
@@ -214,7 +215,7 @@ func (m *Client) download(_registry, d, tag string, digest digest.Digest, authHe
 	err = os.MkdirAll(tmpDir, 0777)
 	if err == nil {
 		if _, e := os.Stat(filepath.Join(tmpDir, "repositories")); e == nil {
-			logrus.Info(tmpDir, "is downloaded,use dir as cache")
+			logrus.Info(tmpDir, " is downloaded,use dir as cache")
 		} else {
 			var req *http.Request
 			req, err = http.NewRequest("GET", fmt.Sprintf("https://%s/v2/%s/blobs/%s", _registry, d, digest), nil)
@@ -243,99 +244,57 @@ func (m *Client) download(_registry, d, tag string, digest digest.Digest, authHe
 							if err == nil {
 								parentid := ""
 								var fakeLayerId string
+								var downloadStatus = make(map[int]bool)
+								var notifyChan = make(chan int, 3)
 								for n, layer := range layers {
 									namer := sha256.New()
 									namer.Write([]byte(parentid + "\n" + layer.Digest + "\n"))
 									fakeLayerId = hex.EncodeToString(namer.Sum(nil))
 									logrus.Infoln("handle layer", n, fakeLayerId, layer.Urls)
-									layerDirName := filepath.Join(tmpDir, fakeLayerId)
-									err = os.Mkdir(layerDirName, 0777)
-									if _, er := os.Stat(filepath.Join(layerDirName, "layer.tar")); er == nil {
-										logrus.Infoln("layer", fakeLayerId, "is existed, continue")
-										config[0].Layers = append(config[0].Layers, fakeLayerId+"/layer.tar")
-										parentid = fakeLayerId
-										continue
+
+									var layerInfo LayerInfo
+									if n == len(layers)-1 {
+										layerInfo = lastLayerInfo
 									}
-									if err == nil || os.IsExist(err) {
-										err = ioutil.WriteFile(filepath.Join(layerDirName, "VERSION"), []byte("1.0"), 0666)
-										if err == nil {
-											req, err = http.NewRequest("GET", fmt.Sprintf("https://%s/v2/%s/blobs/%s", _registry, d, layer.Digest), nil)
-											if err == nil {
-												req.Header = authHeader
-												req.Header.Set("Accept", "application/vnd.docker.distribution.manifest.v2+json")
-												resp, err = m.c.Do(req)
-												if err == nil {
-													if resp.StatusCode != 200 {
-														defer resp.Body.Close()
-														if len(layer.Urls) > 0 {
-															req, err = http.NewRequest("GET", layer.Urls[0], nil)
-															if err == nil {
-																req.Header = authHeader
-																req.Header.Set("Accept", "application/vnd.docker.distribution.manifest.v2+json")
-																resp, err = m.c.Do(req)
-																if err == nil {
-																	if resp.StatusCode != 200 {
-																		err = fmt.Errorf("download from customized url fail for layer[%d]", n)
-																		return err
-																	}
-																}
-															}
-														} else {
-															bts, _ := ioutil.ReadAll(resp.Body)
-															logrus.Fatalln("下载失败", string(bts))
-														}
-													}
-												}
-												if err != nil {
-													logrus.Errorf("请求第%d/%d层失败:%v", n+1, len(layers), err)
-												} else {
-													logrus.Infof("请求第%d/%d层成功", n+1, len(layers))
-												}
-												var dst *os.File
-												dst, err = os.OpenFile(filepath.Join(layerDirName, "layer.tar.part"), os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0666)
-												if err == nil {
-													var greader *gzip.Reader
-													greader, err = gzip.NewReader(resp.Body)
-													if err == nil {
-														_, err = io.Copy(dst, greader)
-														if err == nil {
-															dst.Close()
-															var layerInfo LayerInfo
-															if n == len(layers)-1 {
-																layerInfo = lastLayerInfo
-															}
-															layerInfo.Id = fakeLayerId
-															if parentid != "" {
-																layerInfo.Parent = parentid
-															}
-															parentid = fakeLayerId
-															var jsonFile *os.File
-															jsonFile, err = os.OpenFile(filepath.Join(layerDirName, "json"), os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0666)
-															if err == nil {
-																err = json.NewEncoder(jsonFile).Encode(&layerInfo)
-																if err == nil {
-																	jsonFile.Close()
-																	err = os.Rename(filepath.Join(layerDirName, "layer.tar.part"), filepath.Join(layerDirName, "layer.tar"))
-																}
-															}
-														}
-													}
-												}
-												if err != nil {
-													logrus.Errorf("保存第%d/%d层失败,%v", n+1, len(layers), err)
-												} else {
-													logrus.Infof("保存第%d/%d层成功", n+1, len(layers))
-												}
-												if err != nil {
-													return err
-												} else {
-													config[0].Layers = append(config[0].Layers, fakeLayerId+"/layer.tar")
-												}
-											}
+									layerInfo.Id = fakeLayerId
+									if parentid != "" {
+										layerInfo.Parent = parentid
+									}
+
+									config[0].Layers = append(config[0].Layers, fakeLayerId+"/layer.tar")
+									var copyedHeader = make(http.Header)
+									for k, v := range authHeader {
+										copyedHeader[k] = v
+									}
+									go func(fakeLayerId string, layer Layer, n int, notifyChan chan int, layerInfo *LayerInfo, tmpDir string, _registry string, d string, authHeader http.Header) {
+										er := m.downloadLayer(fakeLayerId, &layer, layerInfo, tmpDir, _registry, d, authHeader)
+										if er != nil {
+											logrus.Errorf("下载第%d/%d层失败:%s", n+1, len(layers), err)
+											err = er
 										}
+										notifyChan <- n
+									}(fakeLayerId, layer, n, notifyChan, &layerInfo, tmpDir, _registry, d, copyedHeader)
+									parentid = fakeLayerId
+								}
+
+								for len(downloadStatus) < len(layers) {
+									n := <-notifyChan
+									downloadStatus[n] = true
+									if len(downloadStatus) == len(layers) {
+										close(notifyChan)
+										logrus.Infof("[%d/%d]下载完成", len(downloadStatus), len(layers))
+										break
+									} else {
+										logrus.Infof("[%d/%d]第%d层下载完成", len(downloadStatus), len(layers), n+1)
 									}
 								}
+
+								if err != nil {
+									return err
+								}
+
 								var manifest *os.File
+								logrus.Debugln("write manifest to", filepath.Join(tmpDir, "manifest.json"))
 								manifest, err = os.OpenFile(filepath.Join(tmpDir, "manifest.json"), os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0666)
 								if err == nil {
 									err = json.NewEncoder(manifest).Encode(&config)
@@ -349,11 +308,13 @@ func (m *Client) download(_registry, d, tag string, digest digest.Digest, authHe
 										rFile, err = os.OpenFile(filepath.Join(tmpDir, "repositories"), os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0666)
 										if err == nil {
 											err = json.NewEncoder(rFile).Encode(&repositories)
+											logrus.Debugln("write repositories to", filepath.Join(tmpDir, "repositories"))
 											goto maketar
 										}
 									}
-
 								}
+								logrus.Debugln("write manifest fail", err)
+
 							}
 						}
 					}
@@ -366,6 +327,8 @@ func (m *Client) download(_registry, d, tag string, digest digest.Digest, authHe
 			err = writeDirToTarGz(tmpDir, tmpDir+"-img.tar.gz")
 			if err == nil {
 				fmt.Println("write tar success", tmpDir+"-img.tar.gz")
+			} else {
+				logrus.Debugln("write tar fail", err)
 			}
 		}
 	}
@@ -382,7 +345,13 @@ func (m *Client) getAuthHead(a, r, d string) (string, error) {
 		err = json.NewDecoder(resp.Body).Decode(&results)
 		logrus.Debug(results)
 		if err == nil && results["access_token"] != nil {
-			return results["access_token"].(string), nil
+			var accessToken = results["access_token"].(string)
+			if accessToken != "" {
+				return results["access_token"].(string), nil
+			} else if results["token"] != nil {
+				logrus.Debug("access_token is empty, try to use token")
+				return results["token"].(string), nil
+			}
 		}
 	}
 	return "", err
@@ -393,6 +362,7 @@ func writeDirToTarGz(sourcedir, destinationfile string) error {
 	gzFile, err := os.Create(destinationfile)
 	gf := gzip.NewWriter(gzFile)
 	tw := tar.NewWriter(gf)
+	logrus.Debug("write tgz file to ", destinationfile)
 	if err == nil {
 
 		defer func() {
@@ -408,6 +378,7 @@ func writeDirToTarGz(sourcedir, destinationfile string) error {
 			}
 			relPath, err := filepath.Rel(sourcedir, path)
 			if err == nil && relPath != "." {
+				logrus.Debugln("write", relPath)
 				header, err := tar.FileInfoHeader(info, path)
 				if err != nil {
 					return err
@@ -443,4 +414,77 @@ func writeDirToTarGz(sourcedir, destinationfile string) error {
 func SetLogLevel(lvl logrus.Level) {
 	logrus.SetLevel(lvl)
 	logrus.Debugln("设置日志级别为", lvl)
+}
+
+func (m *Client) downloadLayer(fakeLayerId string, layer *Layer, layerInfo *LayerInfo, tmpDir string, _registry string, d string, authHeader http.Header) error {
+	layerDirName := filepath.Join(tmpDir, fakeLayerId)
+	err := os.Mkdir(layerDirName, 0777)
+	if _, er := os.Stat(filepath.Join(layerDirName, "layer.tar")); er == nil {
+		logrus.Infoln("layer", fakeLayerId, "is existed, continue")
+		return nil
+	}
+	if err == nil || os.IsExist(err) {
+		err = ioutil.WriteFile(filepath.Join(layerDirName, "VERSION"), []byte("1.0"), 0666)
+		if err == nil {
+			var req *http.Request
+			req, err = http.NewRequest("GET", fmt.Sprintf("https://%s/v2/%s/blobs/%s", _registry, d, layer.Digest), nil)
+			if err == nil {
+				req.Header = authHeader
+				req.Header.Set("Accept", "application/vnd.docker.distribution.manifest.v2+json")
+				var resp *http.Response
+				resp, err = m.c.Do(req)
+				if err == nil {
+					if resp.StatusCode != 200 {
+						defer resp.Body.Close()
+						if len(layer.Urls) > 0 {
+							req, err = http.NewRequest("GET", layer.Urls[0], nil)
+							if err == nil {
+								req.Header = authHeader
+								req.Header.Set("Accept", "application/vnd.docker.distribution.manifest.v2+json")
+								resp, err = m.c.Do(req)
+								if err == nil {
+									if resp.StatusCode != 200 {
+										err = fmt.Errorf("download from customized url fail")
+										return err
+									}
+								}
+							}
+						} else {
+							bts, _ := ioutil.ReadAll(resp.Body)
+							logrus.Fatalln("下载失败", string(bts))
+						}
+					}
+				}
+				if err != nil {
+					return errors.Wrap(err, "请求失败")
+				}
+				var dst *os.File
+				dst, err = os.OpenFile(filepath.Join(layerDirName, "layer.tar.part"), os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0666)
+				if err == nil {
+					var greader *gzip.Reader
+					greader, err = gzip.NewReader(resp.Body)
+					if err == nil {
+						_, err = io.Copy(dst, greader)
+						if err == nil {
+							dst.Close()
+							var jsonFile *os.File
+							jsonFile, err = os.OpenFile(filepath.Join(layerDirName, "json"), os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0666)
+							if err == nil {
+								err = json.NewEncoder(jsonFile).Encode(layerInfo)
+								if err == nil {
+									jsonFile.Close()
+									err = os.Rename(filepath.Join(layerDirName, "layer.tar.part"), filepath.Join(layerDirName, "layer.tar"))
+								}
+							}
+						}
+					}
+				}
+				if err != nil {
+					err = errors.Wrap(err, "下载失败")
+				}
+				return err
+			}
+		}
+	}
+	return err
 }
