@@ -54,6 +54,7 @@ func main() {
 		if err != nil {
 			logrus.Fatalln("代理地址"+*proxy+"错误", err)
 		}
+		logrus.Info("use http proxy ", proxyUrl.String())
 		client.SetClient(&http.Client{
 			Transport: &http.Transport{
 				Proxy: http.ProxyURL(proxyUrl),

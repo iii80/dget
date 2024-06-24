@@ -81,7 +81,7 @@ func (m *Client) SetClient(c *http.Client) {
 func (m *Client) Install(_registry, d, tag string, arch string, printInfo bool) (err error) {
 	var authUrl = _authUrl
 	var regService = _regService
-	resp, err := http.Get(fmt.Sprintf("https://%s/v2/", _registry))
+	resp, err := m.c.Get(fmt.Sprintf("https://%s/v2/", _registry))
 	if err == nil {
 		if !strings.Contains(d, "/") {
 			d = "library/" + d
@@ -104,7 +104,7 @@ func (m *Client) Install(_registry, d, tag string, arch string, printInfo bool) 
 		logrus.Debugln("reg_service", regService)
 		logrus.Debugln("authUrl", authUrl)
 
-		accessToken, err = getAuthHead(authUrl, regService, d)
+		accessToken, err = m.getAuthHead(authUrl, regService, d)
 		if err == nil {
 
 			var req *http.Request
@@ -372,10 +372,10 @@ func (m *Client) download(_registry, d, tag string, digest digest.Digest, authHe
 	return
 }
 
-func getAuthHead(a, r, d string) (string, error) {
+func (m *Client) getAuthHead(a, r, d string) (string, error) {
 	var regUrl = fmt.Sprintf("%s?service=%s&scope=repository:%s:pull", a, r, d)
-	logrus.Debug("get auth head from", regUrl)
-	resp, err := http.Get(regUrl)
+	logrus.Debug("get auth head from ", regUrl)
+	resp, err := m.c.Get(regUrl)
 	if err == nil {
 		defer resp.Body.Close()
 		var results map[string]interface{}
