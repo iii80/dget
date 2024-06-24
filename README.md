@@ -55,6 +55,14 @@ dget -arch linux/arm influxdb:1.8.3
 
 使用参数 -proxy 设置下载和获取时需要使用的代理
 
+## 获取tag
+
+如果你不知道要获取那个tag的软件，可以使用-tag参数获得软件的tag列表，由@joder提供
+
+```bash
+dget -tag influxdb:1.8.3
+```
+
 ## 直接下载链接
 
 [windows x64版本](./bin/windows_amd64/dget.exe)
