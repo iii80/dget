@@ -407,14 +407,17 @@ func (m *Client) getAuthHead(a, r, d string) (string, error) {
 		var results map[string]interface{}
 		err = json.NewDecoder(resp.Body).Decode(&results)
 		logrus.Debug(results)
-		if err == nil && results["access_token"] != nil {
-			var accessToken = results["access_token"].(string)
-			if accessToken != "" {
-				return results["access_token"].(string), nil
+		if err == nil {
+			var accessToken string
+			if results["access_token"] != nil {
+				accessToken = results["access_token"].(string)
 			} else if results["token"] != nil {
-				logrus.Debug("access_token is empty, try to use token")
-				return results["token"].(string), nil
+				accessToken = results["token"].(string)
 			}
+			if accessToken != "" {
+				return accessToken, nil
+			}
+			return "", errors.New("access_token is empty")
 		}
 	}
 	return "", err
