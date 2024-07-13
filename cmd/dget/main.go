@@ -19,6 +19,7 @@ func main() {
 	username := flag.String("username", "", "username")
 	password := flag.String("password", "", "password")
 	tags := flag.Bool("tags", false, "获取tag列表")
+	syncCount := flag.Int("sync", 3, "并发下载数量")
 	var registry string
 	flag.StringVar(&registry, "registry", "registry-1.docker.io", "指定镜像仓库")
 
@@ -67,7 +68,7 @@ func main() {
 		client.SetClient(http.DefaultClient)
 	}
 
-	var err = client.Install(registry, pkg, tag, *arch, *printInfo, *tags, *username, *password)
+	var err = client.Install(*syncCount, registry, pkg, tag, *arch, *printInfo, *tags, *username, *password)
 	if err != nil {
 		logrus.Fatalln("下载发生错误", err)
 	}

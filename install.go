@@ -79,11 +79,13 @@ type TagList struct {
 	Tags []string
 }
 
+type SyncSignal struct{}
+
 func (m *Client) SetClient(c *http.Client) {
 	m.c = c
 }
 
-func (m *Client) Install(_registry, d, tag string, arch string, printInfo bool, onlyGetTag bool, username string, password string) (err error) {
+func (m *Client) Install(syncCount int, _registry, d, tag string, arch string, printInfo bool, onlyGetTag bool, username string, password string) (err error) {
 	var authUrl = _authUrl
 	var regService = _regService
 	resp, err := m.c.Get(fmt.Sprintf("https://%s/v2/", _registry))
@@ -232,7 +234,7 @@ func (m *Client) Install(_registry, d, tag string, arch string, printInfo bool, 
 								resp.Body.Close()
 								logrus.Infof("获得Manifest信息，共%d层需要下载", len(info.Layers))
 
-								err = m.download(_registry, d, tag, info.Config.Digest, authHeader, info.Layers)
+								err = m.download(syncCount, _registry, d, tag, info.Config.Digest, authHeader, info.Layers)
 
 								if err != nil {
 									goto response
@@ -273,7 +275,7 @@ func (m *Client) getTokenWithBasicAuth(url, service, repository, username, passw
 	return "", err
 }
 
-func (m *Client) download(_registry, d, tag string, digest digest.Digest, authHeader http.Header, layers []Layer) (err error) {
+func (m *Client) download(syncCount int, _registry, d, tag string, digest digest.Digest, authHeader http.Header, layers []Layer) (err error) {
 	var tmpDir = fmt.Sprintf("tmp_%s_%s", d, tag)
 	err = os.MkdirAll(tmpDir, 0777)
 	if err == nil {
@@ -308,9 +310,9 @@ func (m *Client) download(_registry, d, tag string, digest digest.Digest, authHe
 								parentid := ""
 								var fakeLayerId string
 								var downloadStatus = make(map[int]bool)
-								var notifyChan = make(chan int, 3)
+								var notifyChan = make(chan int, 1)
 								//限制并发下载数为3
-								var ch = make(chan struct{}, 3)
+								var ch = make(chan SyncSignal, syncCount)
 								for n, layer := range layers {
 									namer := sha256.New()
 									namer.Write([]byte(parentid + "\n" + layer.Digest + "\n"))
@@ -332,7 +334,7 @@ func (m *Client) download(_registry, d, tag string, digest digest.Digest, authHe
 										copyedHeader[k] = v
 									}
 									go func(fakeLayerId string, layer Layer, n int, notifyChan chan int, layerInfo *LayerInfo, tmpDir string, _registry string, d string, authHeader http.Header) {
-										ch <- struct{}{}
+										ch <- SyncSignal{}
 										er := m.downloadLayer(fakeLayerId, &layer, layerInfo, tmpDir, _registry, d, authHeader)
 										if er != nil {
 											logrus.Errorf("下载第%d/%d层失败:%s", n+1, len(layers), err)
