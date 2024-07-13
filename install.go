@@ -309,6 +309,8 @@ func (m *Client) download(_registry, d, tag string, digest digest.Digest, authHe
 								var fakeLayerId string
 								var downloadStatus = make(map[int]bool)
 								var notifyChan = make(chan int, 3)
+								//限制并发下载数为3
+								var ch = make(chan struct{}, 3)
 								for n, layer := range layers {
 									namer := sha256.New()
 									namer.Write([]byte(parentid + "\n" + layer.Digest + "\n"))
@@ -330,12 +332,14 @@ func (m *Client) download(_registry, d, tag string, digest digest.Digest, authHe
 										copyedHeader[k] = v
 									}
 									go func(fakeLayerId string, layer Layer, n int, notifyChan chan int, layerInfo *LayerInfo, tmpDir string, _registry string, d string, authHeader http.Header) {
+										ch <- struct{}{}
 										er := m.downloadLayer(fakeLayerId, &layer, layerInfo, tmpDir, _registry, d, authHeader)
 										if er != nil {
 											logrus.Errorf("下载第%d/%d层失败:%s", n+1, len(layers), err)
 											err = er
 										}
 										notifyChan <- n
+										<-ch
 									}(fakeLayerId, layer, n, notifyChan, &layerInfo, tmpDir, _registry, d, copyedHeader)
 									parentid = fakeLayerId
 								}
