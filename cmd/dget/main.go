@@ -46,7 +46,7 @@ func main() {
 			tag = "latest"
 		}
 		partsOfPkg := strings.Split(pkg, "/")
-		if len(partsOfPkg) == 3 {
+		if len(partsOfPkg) >= 3 {
 			registry = partsOfPkg[0]
 			pkg = strings.Join(partsOfPkg[1:], "/")
 		}
